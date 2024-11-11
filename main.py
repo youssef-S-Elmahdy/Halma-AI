@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import messagebox
-import time
 
 
 class Position:
@@ -44,7 +43,7 @@ class HalmaBoard:
         self.canvas = tk.Canvas(root, width=self.size * self.cell_size, height=self.size * self.cell_size)
         self.canvas.pack()
 
-        self.seconds_limit = seconds_limit  # time limit per move in seconds
+        self.seconds_limit = seconds_limit
         self.time_remaining = self.seconds_limit
         self.timer_id = None
 
@@ -63,7 +62,7 @@ class HalmaBoard:
         self.status_bar.pack()
 
         self.canvas.bind("<Button-1>", self.on_click)
-        self.start_timer()  # Start the timer for the first turn
+        self.start_timer()
 
     def create_grid(self):
         for row in range(self.size):
@@ -153,9 +152,9 @@ class HalmaBoard:
         position.move_to(*to_pos)
         del self.pieces[from_pos]
         self.pieces[to_pos] = position
-        position.clear_outline()  # Clear the outline after moving
+        position.clear_outline()
         self.clear_highlights()
-        self.update_score()  # Update score after each move
+        self.update_score()
         self.check_for_win()
 
     def switch_turn(self):
@@ -164,7 +163,6 @@ class HalmaBoard:
         self.update_status()
 
     def start_timer(self):
-        """Start or continue the countdown timer."""
         if self.time_remaining > 0:
             self.time_remaining -= 1
             self.update_status()
@@ -174,7 +172,6 @@ class HalmaBoard:
             self.switch_turn()
 
     def reset_timer(self):
-        """Reset the timer for a new turn and restart countdown."""
         if self.timer_id:
             self.canvas.after_cancel(self.timer_id)  # Stop the current timer
         self.time_remaining = self.seconds_limit
@@ -191,17 +188,16 @@ class HalmaBoard:
                                     f"Black Score: {self.black_score} | Time Left: {self.time_remaining}s")
 
     def check_for_win(self):
-        if self.white_score == 5:
+        if self.white_score >= 5:
             messagebox.showinfo("Game Over", f"White wins with a score of {self.white_score}!")
             self.canvas.unbind("<Button-1>")
             self.stop_timer()
-        elif self.black_score == 5:
+        elif self.black_score >= 5:
             messagebox.showinfo("Game Over", f"Black wins with a score of {self.black_score}!")
             self.canvas.unbind("<Button-1>")
             self.stop_timer()
 
     def stop_timer(self):
-        """Stops the timer completely."""
         if self.timer_id:
             self.canvas.after_cancel(self.timer_id)
             self.timer_id = None
@@ -209,5 +205,5 @@ class HalmaBoard:
 
 root = tk.Tk()
 root.title("Halma")
-game_board = HalmaBoard(root, seconds_limit=10)  # Set a 10-second limit for demonstration
+game_board = HalmaBoard(root, seconds_limit=15)  # Set a 10-second limit for demonstration
 root.mainloop()
