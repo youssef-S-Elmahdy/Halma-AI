@@ -21,14 +21,13 @@ class Position:
         return self.canvas.create_oval(x1, y1, x2, y2, fill=self.color, outline="")
 
     def move_to(self, new_row, new_col, duration=500, callback=None):
-        # Animate the movement from current position to new position over 'duration' milliseconds
         start_x = self.col * self.cell_size + 10
         start_y = self.row * self.cell_size + 10
         end_x = new_col * self.cell_size + 10
         end_y = new_row * self.cell_size + 10
         dx = end_x - start_x
         dy = end_y - start_y
-        steps = int(duration / 20)  # Update every 20 ms
+        steps = int(duration / 20)
         if steps == 0:
             steps = 1
         delta_x = dx / steps
@@ -42,13 +41,12 @@ class Position:
                 current_step += 1
                 self.canvas.after(20, animate)
             else:
-                # Snap to final position to correct any rounding errors
                 final_x1 = end_x
                 final_y1 = end_y
                 final_x2 = final_x1 + self.cell_size - 20
                 final_y2 = final_y1 + self.cell_size - 20
                 self.canvas.coords(self.piece_id, final_x1, final_y1, final_x2, final_y2)
-                self.row, self.col = new_row, new_col  # Update position
+                self.row, self.col = new_row, new_col
                 if callback:
                     callback()
 
@@ -65,14 +63,14 @@ class Position:
 
 
 class BoardState:
-    def __init__(self, size=8):
+    def __init__(self, size=8, white_goal=None, black_goal=None):
         self.size = size
         self.board = [['' for _ in range(size)] for _ in range(size)]
-        # Initialize pieces
+        self.white_goal = white_goal if white_goal else []
+        self.black_goal = black_goal if black_goal else []
         self.initialize_pieces()
 
     def initialize_pieces(self):
-        # Initialize the board with the starting positions
         white_positions = [
             (0, 0), (0, 1), (0, 2), (0, 3),
             (1, 0), (1, 1), (1, 2),
@@ -91,7 +89,7 @@ class BoardState:
             self.board[row][col] = 'black'
 
     def copy(self):
-        new_board = BoardState(self.size)
+        new_board = BoardState(self.size, self.white_goal, self.black_goal)
         new_board.board = [row[:] for row in self.board]
         return new_board
 
@@ -104,8 +102,6 @@ class BoardState:
         return pieces
 
     def get_possible_moves(self, player_color):
-        # Return a list of possible moves for player_color
-        # Each move is a tuple: (from_row, from_col, to_row, to_col, [path])
         moves = []
         pieces = self.get_pieces(player_color)
         for piece in pieces:
@@ -115,22 +111,19 @@ class BoardState:
 
     def get_piece_moves(self, row, col):
         moves = []
-        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # Only orthogonal directions
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
         for dr, dc in directions:
             nr, nc = row + dr, col + dc
             if 0 <= nr < self.size and 0 <= nc < self.size:
                 if self.board[nr][nc] == '':
-                    # Single-step move
                     moves.append((row, col, nr, nc, []))
                 elif self.board[nr][nc] != '':
                     jr, jc = nr + dr, nc + dc
                     if 0 <= jr < self.size and 0 <= jc < self.size and self.board[jr][jc] == '':
-                        # Single jump
                         moves.append((row, col, jr, jc, []))
         return moves
 
     def make_move(self, move):
-        # move is a tuple: (from_row, from_col, to_row, to_col, [path])
         from_row, from_col, to_row, to_col, _ = move
         self.board[to_row][to_col] = self.board[from_row][from_col]
         self.board[from_row][from_col] = ''
@@ -141,7 +134,6 @@ class BoardState:
         self.board[to_row][to_col] = ''
 
     def evaluate(self, player_color):
-        # Basic heuristic: sum of distances of pieces to goal
         total_distance = 0
         opponent_color = 'black' if player_color == 'white' else 'white'
         for row in range(self.size):
@@ -159,15 +151,8 @@ class BoardState:
             return row + col
 
     def is_terminal(self):
-        # Check for win condition
-        white_goal = [
-            (7, 7), (7, 6), (7, 5), (6, 7), (6, 6)
-        ]
-        black_goal = [
-            (0, 0), (0, 1), (1, 0), (1, 1)
-        ]
-        white_pieces_in_goal = sum(1 for pos in white_goal if self.board[pos[0]][pos[1]] == 'white')
-        black_pieces_in_goal = sum(1 for pos in black_goal if self.board[pos[0]][pos[1]] == 'black')
+        white_pieces_in_goal = sum(1 for pos in self.white_goal if self.board[pos[0]][pos[1]] == 'white')
+        black_pieces_in_goal = sum(1 for pos in self.black_goal if self.board[pos[0]][pos[1]] == 'black')
         if white_pieces_in_goal >= 5:
             return True
         if black_pieces_in_goal >= 5:
@@ -177,9 +162,9 @@ class BoardState:
 
 class AIPlayer:
     def __init__(self, color, time_limit, max_depth=3):
-        self.color = color  # 'white' or 'black'
-        self.time_limit = time_limit  # Time limit in seconds
-        self.max_depth = max_depth  # Maximum depth to search
+        self.color = color
+        self.time_limit = time_limit
+        self.max_depth = max_depth
         self.start_time = None
 
     def make_move(self, board):
@@ -265,6 +250,9 @@ class HalmaBoard:
         self.white_score = 0
         self.black_score = 0
 
+        self.white_goal = [(7, 7), (7, 6), (7, 5), (6, 7), (6, 6)]
+        self.black_goal = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1)]
+
         self.initialize_pieces()
         self.status_bar = tk.Label(root, text="White's Turn | White Score: 0 | Black Score: 0 | Time Left: 10s",
                                    font=("Arial", 14))
@@ -287,9 +275,8 @@ class HalmaBoard:
 
         self.canvas.bind("<Button-1>", self.on_click)
 
-        self.start_timer()  # Start the timer for both players
+        self.start_timer()
 
-        # Start the game if the first player is AI
         if not self.is_human[self.current_turn]:
             self.canvas.after(100, self.computer_move)
 
@@ -343,7 +330,6 @@ class HalmaBoard:
         self.valid_moves = valid_moves
 
     def get_possible_moves(self, row, col):
-        # Use the BoardState move generator for a single piece
         board_state = self.create_board_state()
         return board_state.get_piece_moves(row, col)
 
@@ -354,7 +340,7 @@ class HalmaBoard:
 
     def on_click(self, event):
         if not self.is_human[self.current_turn]:
-            return  # Ignore clicks when it's AI's turn
+            return
 
         row, col = event.y // self.cell_size, event.x // self.cell_size
 
@@ -368,8 +354,7 @@ class HalmaBoard:
             for move in self.valid_moves:
                 if (row, col) == (move[0], move[1]):
                     position = self.selected_piece
-                    self.apply_move(move[3])  # Apply the move using the move data
-                    # Do not switch turn here; it will be handled after animation
+                    self.apply_move(move[3])
                     break
 
     def move_piece(self, position, to_pos, animate=False, callback=None):
@@ -392,29 +377,24 @@ class HalmaBoard:
             after_animation()
 
     def apply_move(self, move):
-        # move is a tuple: (from_row, from_col, to_row, to_col, [path])
         from_row, from_col, to_row, to_col, path = move
         position = self.pieces[(from_row, from_col)]
-        # Determine if the current player is human or AI
         is_human_player = self.is_human[self.current_turn]
 
         def after_move():
-            if is_human_player:
-                self.switch_turn()
-            else:
-                # For AI, switch turn after move and animation
+            if not self.check_for_win():
                 self.switch_turn()
 
         self.move_piece(position, (to_row, to_col), animate=True, callback=after_move)
 
     def switch_turn(self):
         if self.timer_id:
-            self.canvas.after_cancel(self.timer_id)  # Stop the current timer
+            self.canvas.after_cancel(self.timer_id)
 
         self.current_turn = 'black' if self.current_turn == 'white' else 'white'
-        self.time_remaining = self.seconds_limit  # Reset time for the new player
+        self.time_remaining = self.seconds_limit
         self.update_status()
-        self.start_timer()  # Start the timer for the new turn
+        self.start_timer()
 
         if not self.is_human[self.current_turn]:
             self.canvas.after(100, self.computer_move)
@@ -426,13 +406,12 @@ class HalmaBoard:
             self.timer_id = self.canvas.after(1000, self.start_timer)
         else:
             messagebox.showinfo("Time's up!", f"{self.current_turn.capitalize()} ran out of time!")
-            self.switch_turn()
+            if not self.check_for_win():
+                self.switch_turn()
 
     def update_score(self):
-        white_goal = [(7, 7), (7, 6), (7, 5), (6, 7), (6, 6)]
-        black_goal = [(0, 0), (0, 1), (1, 0), (1, 1)]
-        self.white_score = sum(1 for pos in white_goal if pos in self.pieces and self.pieces[pos].color == 'white')
-        self.black_score = sum(1 for pos in black_goal if pos in self.pieces and self.pieces[pos].color == 'black')
+        self.white_score = sum(1 for pos in self.white_goal if pos in self.pieces and self.pieces[pos].color == 'white')
+        self.black_score = sum(1 for pos in self.black_goal if pos in self.pieces and self.pieces[pos].color == 'black')
 
     def update_status(self):
         self.status_bar.config(text=f"{self.current_turn.capitalize()}'s Turn | White Score: {self.white_score} | "
@@ -440,14 +419,18 @@ class HalmaBoard:
         self.status_bar.update_idletasks()
 
     def check_for_win(self):
+        self.update_score()
         if self.white_score >= 5:
             messagebox.showinfo("Game Over", f"White wins with a score of {self.white_score}!")
             self.canvas.unbind("<Button-1>")
             self.stop_timer()
+            return True
         elif self.black_score >= 5:
             messagebox.showinfo("Game Over", f"Black wins with a score of {self.black_score}!")
             self.canvas.unbind("<Button-1>")
             self.stop_timer()
+            return True
+        return False
 
     def stop_timer(self):
         if self.timer_id:
@@ -455,38 +438,30 @@ class HalmaBoard:
             self.timer_id = None
 
     def create_board_state(self):
-        board_state = BoardState(self.size)
+        board_state = BoardState(self.size, white_goal=self.white_goal, black_goal=self.black_goal)
         board_state.board = [['' for _ in range(self.size)] for _ in range(self.size)]
         for (row, col), position in self.pieces.items():
             board_state.board[row][col] = position.color
         return board_state
 
     def computer_move(self):
-        # Create a BoardState from the current game state
         board_state = self.create_board_state()
         ai_player = self.white_player if self.current_turn == 'white' else self.black_player
 
-        # Run the AI move computation in a separate thread
         threading.Thread(target=self.run_ai_move, args=(ai_player, board_state)).start()
 
     def run_ai_move(self, ai_player, board_state):
-        # Perform the AI's move computation in a separate thread
         best_move = ai_player.make_move(board_state)
-        # Schedule the move application on the main thread
         self.canvas.after(0, self.apply_ai_move, best_move)
 
     def apply_ai_move(self, best_move):
         if best_move:
-            # Apply the move to the game
             self.apply_move(best_move)
         else:
-            # No valid move
             self.switch_turn()
 
 
-# Run the game
 root = tk.Tk()
 root.title("Halma")
-# Set white_player or black_player to 'ai' to make it an AI player
-game_board = HalmaBoard(root, seconds_limit=15, white_player='human', black_player='ai')  # AI plays as black
+game_board = HalmaBoard(root, seconds_limit=15, white_player='human', black_player='ai')
 root.mainloop()
