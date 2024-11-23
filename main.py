@@ -150,24 +150,17 @@ class BoardState:
 
 
 class AIPlayer:
-    def __init__(self, color, time_limit):
+    def __init__(self, color, time_limit, max_depth=3):
         self.color = color  # 'white' or 'black'
         self.time_limit = time_limit  # Time limit in seconds
+        self.max_depth = max_depth  # Maximum depth to search
         self.start_time = None
 
     def make_move(self, board):
-        # board is an instance of BoardState
         self.start_time = time.time()
-        depth = 1
         best_move = None
         try:
-            while True:
-                move = self.alpha_beta_search(board, depth)
-                if move is not None:
-                    best_move = move
-                depth += 1
-                if time.time() - self.start_time >= self.time_limit:
-                    break
+            best_move = self.alpha_beta_search(board, self.max_depth)
         except TimeoutError:
             pass
         return best_move
@@ -257,12 +250,12 @@ class HalmaBoard:
         }
 
         if not self.is_human['white']:
-            self.white_player = AIPlayer('white', self.seconds_limit)
+            self.white_player = AIPlayer('white', self.seconds_limit, max_depth=3)
         else:
             self.white_player = None
 
         if not self.is_human['black']:
-            self.black_player = AIPlayer('black', self.seconds_limit)
+            self.black_player = AIPlayer('black', self.seconds_limit, max_depth=3)
         else:
             self.black_player = None
 
