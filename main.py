@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 import time
-import threading  # Import threading module
+import threading
 
 
 class Position:
@@ -20,13 +20,39 @@ class Position:
         y2 = y1 + self.cell_size - 20
         return self.canvas.create_oval(x1, y1, x2, y2, fill=self.color, outline="")
 
-    def move_to(self, row, col):
-        self.row, self.col = row, col
-        x1 = col * self.cell_size + 10
-        y1 = row * self.cell_size + 10
-        x2 = x1 + self.cell_size - 20
-        y2 = y1 + self.cell_size - 20
-        self.canvas.coords(self.piece_id, x1, y1, x2, y2)
+    def move_to(self, new_row, new_col, duration=500, callback=None):
+        # Animate the movement from current position to new position over 'duration' milliseconds
+        start_x = self.col * self.cell_size + 10
+        start_y = self.row * self.cell_size + 10
+        end_x = new_col * self.cell_size + 10
+        end_y = new_row * self.cell_size + 10
+        dx = end_x - start_x
+        dy = end_y - start_y
+        steps = int(duration / 20)  # Update every 20 ms
+        if steps == 0:
+            steps = 1
+        delta_x = dx / steps
+        delta_y = dy / steps
+        current_step = 0
+
+        def animate():
+            nonlocal current_step
+            if current_step < steps:
+                self.canvas.move(self.piece_id, delta_x, delta_y)
+                current_step += 1
+                self.canvas.after(20, animate)
+            else:
+                # Snap to final position to correct any rounding errors
+                final_x1 = end_x
+                final_y1 = end_y
+                final_x2 = final_x1 + self.cell_size - 20
+                final_y2 = final_y1 + self.cell_size - 20
+                self.canvas.coords(self.piece_id, final_x1, final_y1, final_x2, final_y2)
+                self.row, self.col = new_row, new_col  # Update position
+                if callback:
+                    callback()
+
+        animate()
 
     def set_outline(self, color="red", width=3):
         self.canvas.itemconfig(self.piece_id, outline=color, width=width)
@@ -343,24 +369,43 @@ class HalmaBoard:
                 if (row, col) == (move[0], move[1]):
                     position = self.selected_piece
                     self.apply_move(move[3])  # Apply the move using the move data
-                    self.switch_turn()
+                    # Do not switch turn here; it will be handled after animation
                     break
 
-    def move_piece(self, position, to_pos):
+    def move_piece(self, position, to_pos, animate=False, callback=None):
         from_pos = (position.row, position.col)
-        position.move_to(*to_pos)
-        del self.pieces[from_pos]
-        self.pieces[to_pos] = position
+
+        def after_animation():
+            del self.pieces[from_pos]
+            self.pieces[to_pos] = position
+            position.clear_outline()
+            self.clear_highlights()
+            self.update_score()
+            self.check_for_win()
+            if callback:
+                callback()
+
+        if animate:
+            position.move_to(to_pos[0], to_pos[1], duration=500, callback=after_animation)
+        else:
+            position.move_to(to_pos[0], to_pos[1])
+            after_animation()
 
     def apply_move(self, move):
         # move is a tuple: (from_row, from_col, to_row, to_col, [path])
         from_row, from_col, to_row, to_col, path = move
         position = self.pieces[(from_row, from_col)]
-        self.move_piece(position, (to_row, to_col))
-        position.clear_outline()
-        self.clear_highlights()
-        self.update_score()
-        self.check_for_win()
+        # Determine if the current player is human or AI
+        is_human_player = self.is_human[self.current_turn]
+
+        def after_move():
+            if is_human_player:
+                self.switch_turn()
+            else:
+                # For AI, switch turn after move and animation
+                self.switch_turn()
+
+        self.move_piece(position, (to_row, to_col), animate=True, callback=after_move)
 
     def switch_turn(self):
         if self.timer_id:
@@ -434,7 +479,6 @@ class HalmaBoard:
         if best_move:
             # Apply the move to the game
             self.apply_move(best_move)
-            self.switch_turn()
         else:
             # No valid move
             self.switch_turn()
