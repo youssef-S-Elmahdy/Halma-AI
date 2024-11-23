@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 import time
+import threading  # Import threading module
 
 
 class Position:
@@ -159,16 +160,16 @@ class AIPlayer:
         self.start_time = time.time()
         depth = 1
         best_move = None
-        while True:
-            try:
+        try:
+            while True:
                 move = self.alpha_beta_search(board, depth)
                 if move is not None:
                     best_move = move
                 depth += 1
-            except TimeoutError:
-                break
-            if time.time() - self.start_time >= self.time_limit:
-                break
+                if time.time() - self.start_time >= self.time_limit:
+                    break
+        except TimeoutError:
+            pass
         return best_move
 
     def alpha_beta_search(self, board, depth):
@@ -267,10 +268,10 @@ class HalmaBoard:
 
         self.canvas.bind("<Button-1>", self.on_click)
 
-        # Start the timer or AI move depending on who starts
-        if self.is_human[self.current_turn]:
-            self.start_timer()
-        else:
+        self.start_timer()  # Start the timer for both players
+
+        # Start the game if the first player is AI
+        if not self.is_human[self.current_turn]:
             self.canvas.after(100, self.computer_move)
 
     def create_grid(self):
@@ -369,9 +370,14 @@ class HalmaBoard:
         self.check_for_win()
 
     def switch_turn(self):
+        if self.timer_id:
+            self.canvas.after_cancel(self.timer_id)  # Stop the current timer
+
         self.current_turn = 'black' if self.current_turn == 'white' else 'white'
-        self.reset_timer()  # Reset the timer for the new turn
+        self.time_remaining = self.seconds_limit  # Reset time for the new player
         self.update_status()
+        self.start_timer()  # Start the timer for the new turn
+
         if not self.is_human[self.current_turn]:
             self.canvas.after(100, self.computer_move)
 
@@ -384,13 +390,6 @@ class HalmaBoard:
             messagebox.showinfo("Time's up!", f"{self.current_turn.capitalize()} ran out of time!")
             self.switch_turn()
 
-    def reset_timer(self):
-        if self.timer_id:
-            self.canvas.after_cancel(self.timer_id)  # Stop the current timer
-        self.time_remaining = self.seconds_limit
-        if self.is_human[self.current_turn]:
-            self.start_timer()  # Start timer only for human player
-
     def update_score(self):
         white_goal = [(7, 7), (7, 6), (7, 5), (6, 7), (6, 6)]
         black_goal = [(0, 0), (0, 1), (1, 0), (1, 1)]
@@ -400,6 +399,7 @@ class HalmaBoard:
     def update_status(self):
         self.status_bar.config(text=f"{self.current_turn.capitalize()}'s Turn | White Score: {self.white_score} | "
                                     f"Black Score: {self.black_score} | Time Left: {self.time_remaining}s")
+        self.status_bar.update_idletasks()
 
     def check_for_win(self):
         if self.white_score >= 5:
@@ -427,7 +427,17 @@ class HalmaBoard:
         # Create a BoardState from the current game state
         board_state = self.create_board_state()
         ai_player = self.white_player if self.current_turn == 'white' else self.black_player
+
+        # Run the AI move computation in a separate thread
+        threading.Thread(target=self.run_ai_move, args=(ai_player, board_state)).start()
+
+    def run_ai_move(self, ai_player, board_state):
+        # Perform the AI's move computation in a separate thread
         best_move = ai_player.make_move(board_state)
+        # Schedule the move application on the main thread
+        self.canvas.after(0, self.apply_ai_move, best_move)
+
+    def apply_ai_move(self, best_move):
         if best_move:
             # Apply the move to the game
             self.apply_move(best_move)
