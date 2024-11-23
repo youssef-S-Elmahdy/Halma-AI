@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
+import math
 
 
 class Position:
@@ -37,7 +38,7 @@ class Position:
 
 
 class HalmaBoard:
-    def __init__(self, root, size=8, seconds_limit=10):
+    def __init__(self, root, size=8, seconds_limit=10, ai_enabled=False):
         self.size = size
         self.cell_size = 50
         self.canvas = tk.Canvas(root, width=self.size * self.cell_size, height=self.size * self.cell_size)
@@ -47,21 +48,27 @@ class HalmaBoard:
         self.time_remaining = self.seconds_limit
         self.timer_id = None
 
-        self.create_grid()
-
         self.pieces = {}
         self.selected_piece = None
         self.valid_moves = []
         self.current_turn = 'white'
         self.white_score = 0
         self.black_score = 0
+        self.turn_completed = False
 
+        self.ai_enabled = ai_enabled
+
+        # Create grid, pieces, and UI elements
+        self.create_grid()
         self.initialize_pieces()
+
+        # Status bar to display game state
         self.status_bar = tk.Label(root, text="White's Turn | White Score: 0 | Black Score: 0 | Time Left: 10s",
                                    font=("Arial", 14))
         self.status_bar.pack()
 
         self.canvas.bind("<Button-1>", self.on_click)
+        self.update_status()
         self.start_timer()
 
     def create_grid(self):
@@ -95,6 +102,23 @@ class HalmaBoard:
             self.place_piece(row, col, 'white')
         for row, col in black_positions:
             self.place_piece(row, col, 'black')
+
+    def update_status(self):
+        """
+        Updates the status bar with the current turn, scores, and remaining time.
+        """
+        self.status_bar.config(text=f"{self.current_turn.capitalize()}'s Turn | White Score: {self.white_score} | "
+                                    f"Black Score: {self.black_score} | Time Left: {self.time_remaining}s")
+
+    def update_score(self):
+        """
+        Updates the scores for each player based on their pieces in the goal area.
+        """
+        white_goal = [(7, 7), (7, 6), (7, 5), (6, 7), (6, 6)]
+        black_goal = [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+        self.white_score = sum(1 for pos in white_goal if pos in self.pieces and self.pieces[pos].color == 'white')
+        self.black_score = sum(1 for pos in black_goal if pos in self.pieces and self.pieces[pos].color == 'black')
 
     def highlight_moves(self, row, col):
         self.clear_highlights()
@@ -132,6 +156,11 @@ class HalmaBoard:
         self.valid_moves = []
 
     def on_click(self, event):
+        if self.ai_enabled and self.current_turn == 'black':
+            return
+        if self.turn_completed:
+            return
+
         row, col = event.y // self.cell_size, event.x // self.cell_size
 
         if (row, col) in self.pieces and self.pieces[(row, col)].color == self.current_turn:
@@ -144,8 +173,9 @@ class HalmaBoard:
             for move in self.valid_moves:
                 if (row, col) == (move[0], move[1]):
                     self.move_piece(self.selected_piece, (move[0], move[1]))
+                    self.turn_completed = True
                     self.switch_turn()
-                    break
+                    return
 
     def move_piece(self, position, to_pos):
         from_pos = (position.row, position.col)
@@ -157,10 +187,29 @@ class HalmaBoard:
         self.update_score()
         self.check_for_win()
 
+    def check_for_win(self):
+        white_goal = [(7, 7), (7, 6), (7, 5), (6, 7), (6, 6)]
+        black_goal = [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+        if self.white_score >= 5:
+            messagebox.showinfo("Game Over", "White wins!")
+            self.end_game()
+        elif self.black_score >= 5:
+            messagebox.showinfo("Game Over", "Black wins!")
+            self.end_game()
+
+    def end_game(self):
+        self.canvas.unbind("<Button-1>")
+        if self.timer_id:
+            self.canvas.after_cancel(self.timer_id)
+
     def switch_turn(self):
         self.current_turn = 'black' if self.current_turn == 'white' else 'white'
-        self.reset_timer()  # Reset the timer for the new turn
+        self.turn_completed = False
+        self.reset_timer()
         self.update_status()
+        if self.ai_enabled and self.current_turn == 'black':
+            self.make_best_move_if_AI()
 
     def start_timer(self):
         if self.time_remaining > 0:
@@ -173,37 +222,85 @@ class HalmaBoard:
 
     def reset_timer(self):
         if self.timer_id:
-            self.canvas.after_cancel(self.timer_id)  # Stop the current timer
+            self.canvas.after_cancel(self.timer_id)
         self.time_remaining = self.seconds_limit
-        self.start_timer()  # Start a new timer for the next turn
+        self.start_timer()
 
-    def update_score(self):
+    def utility_function(self):
         white_goal = [(7, 7), (7, 6), (7, 5), (6, 7), (6, 6)]
         black_goal = [(0, 0), (0, 1), (1, 0), (1, 1)]
-        self.white_score = sum(1 for pos in white_goal if pos in self.pieces and self.pieces[pos].color == 'white')
-        self.black_score = sum(1 for pos in black_goal if pos in self.pieces and self.pieces[pos].color == 'black')
+        white_score = sum(1 for pos in white_goal if pos in self.pieces and self.pieces[pos].color == 'white')
+        black_score = sum(1 for pos in black_goal if pos in self.pieces and self.pieces[pos].color == 'black')
+        return white_score - black_score if self.current_turn == 'white' else black_score - white_score
 
-    def update_status(self):
-        self.status_bar.config(text=f"{self.current_turn.capitalize()}'s Turn | White Score: {self.white_score} | "
-                                    f"Black Score: {self.black_score} | Time Left: {self.time_remaining}s")
+    def minimax(self, depth, alpha, beta, maximizing_player):
+        if depth == 0 or self.white_score >= 5 or self.black_score >= 5:
+            return self.utility_function(), None
 
-    def check_for_win(self):
-        if self.white_score >= 5:
-            messagebox.showinfo("Game Over", f"White wins with a score of {self.white_score}!")
-            self.canvas.unbind("<Button-1>")
-            self.stop_timer()
-        elif self.black_score >= 5:
-            messagebox.showinfo("Game Over", f"Black wins with a score of {self.black_score}!")
-            self.canvas.unbind("<Button-1>")
-            self.stop_timer()
+        best_move = None
+        if maximizing_player:
+            max_eval = -math.inf
+            for move in self.generate_legal_moves('white'):
+                self.apply_move(move)
+                eval, _ = self.minimax(depth - 1, alpha, beta, False)
+                self.undo_move(move)
 
-    def stop_timer(self):
-        if self.timer_id:
-            self.canvas.after_cancel(self.timer_id)
-            self.timer_id = None
+                if eval > max_eval:
+                    max_eval = eval
+                    best_move = move
+                alpha = max(alpha, eval)
+                if beta <= alpha:
+                    break
+            return max_eval, best_move
+        else:
+            min_eval = math.inf
+            for move in self.generate_legal_moves('black'):
+                self.apply_move(move)
+                eval, _ = self.minimax(depth - 1, alpha, beta, True)
+                self.undo_move(move)
+
+                if eval < min_eval:
+                    min_eval = eval
+                    best_move = move
+                beta = min(beta, eval)
+                if beta <= alpha:
+                    break
+            return min_eval, best_move
+
+    def generate_legal_moves(self, color):
+        moves = []
+        for position in self.pieces.values():
+            if position.color == color:
+                possible_moves = self.get_possible_moves(position.row, position.col)
+                for move in possible_moves:
+                    moves.append(((position.row, position.col), move))
+        return moves
+
+    def apply_move(self, move):
+        from_pos, to_pos = move
+        piece = self.pieces[from_pos]
+        piece.move_to(*to_pos)
+        del self.pieces[from_pos]
+        self.pieces[to_pos] = piece
+
+    def undo_move(self, move):
+        to_pos, from_pos = move
+        piece = self.pieces[to_pos]
+        piece.move_to(*from_pos)
+        del self.pieces[to_pos]
+        self.pieces[from_pos] = piece
+
+    def make_best_move_if_AI(self):
+        _, best_move = self.minimax(depth=3, alpha=-math.inf, beta=math.inf, maximizing_player=False)
+        if best_move:
+            self.apply_move(best_move)
+            self.turn_completed = True
+            self.update_score()
+            self.check_for_win()
+            self.switch_turn()
 
 
 root = tk.Tk()
 root.title("Halma")
-game_board = HalmaBoard(root, seconds_limit=15)  # Set a 10-second limit for demonstration
+game_board = HalmaBoard(root, seconds_limit=15, ai_enabled=True)
 root.mainloop()
