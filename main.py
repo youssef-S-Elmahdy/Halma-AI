@@ -120,6 +120,46 @@ class HalmaBoard:
         self.white_score = sum(1 for pos in white_goal if pos in self.pieces and self.pieces[pos].color == 'white')
         self.black_score = sum(1 for pos in black_goal if pos in self.pieces and self.pieces[pos].color == 'black')
 
+    def apply_move(self, move):
+        """
+        Apply a move to the board.
+        """
+        from_pos, to_pos = move
+        piece = self.pieces.pop(from_pos)  # Remove the piece from its original position
+        piece.move_to(*to_pos)
+        self.pieces[to_pos] = piece  # Place the piece in the new position
+
+    def undo_move(self, move):
+        """
+        Undo a move on the board.
+        """
+        to_pos, from_pos = move
+        piece = self.pieces.pop(to_pos)  # Remove the piece from its current position
+        piece.move_to(*from_pos)
+        self.pieces[from_pos] = piece  # Place the piece back in its original position
+
+    def check_for_win(self):
+        """
+        Checks if either player has won by getting 5 pieces into the opponent's goal area.
+        """
+        white_goal = [(7, 7), (7, 6), (7, 5), (6, 7), (6, 6)]
+        black_goal = [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+        if self.white_score >= 5:
+            messagebox.showinfo("Game Over", "White wins!")
+            self.end_game()
+        elif self.black_score >= 5:
+            messagebox.showinfo("Game Over", "Black wins!")
+            self.end_game()
+
+    def end_game(self):
+        """
+        Ends the game by disabling all interactions.
+        """
+        self.canvas.unbind("<Button-1>")
+        if self.timer_id:
+            self.canvas.after_cancel(self.timer_id)
+
     def highlight_moves(self, row, col):
         self.clear_highlights()
 
@@ -187,22 +227,6 @@ class HalmaBoard:
         self.update_score()
         self.check_for_win()
 
-    def check_for_win(self):
-        white_goal = [(7, 7), (7, 6), (7, 5), (6, 7), (6, 6)]
-        black_goal = [(0, 0), (0, 1), (1, 0), (1, 1)]
-
-        if self.white_score >= 5:
-            messagebox.showinfo("Game Over", "White wins!")
-            self.end_game()
-        elif self.black_score >= 5:
-            messagebox.showinfo("Game Over", "Black wins!")
-            self.end_game()
-
-    def end_game(self):
-        self.canvas.unbind("<Button-1>")
-        if self.timer_id:
-            self.canvas.after_cancel(self.timer_id)
-
     def switch_turn(self):
         self.current_turn = 'black' if self.current_turn == 'white' else 'white'
         self.turn_completed = False
@@ -225,13 +249,6 @@ class HalmaBoard:
             self.canvas.after_cancel(self.timer_id)
         self.time_remaining = self.seconds_limit
         self.start_timer()
-
-    def utility_function(self):
-        white_goal = [(7, 7), (7, 6), (7, 5), (6, 7), (6, 6)]
-        black_goal = [(0, 0), (0, 1), (1, 0), (1, 1)]
-        white_score = sum(1 for pos in white_goal if pos in self.pieces and self.pieces[pos].color == 'white')
-        black_score = sum(1 for pos in black_goal if pos in self.pieces and self.pieces[pos].color == 'black')
-        return white_score - black_score if self.current_turn == 'white' else black_score - white_score
 
     def minimax(self, depth, alpha, beta, maximizing_player):
         if depth == 0 or self.white_score >= 5 or self.black_score >= 5:
@@ -276,20 +293,6 @@ class HalmaBoard:
                     moves.append(((position.row, position.col), move))
         return moves
 
-    def apply_move(self, move):
-        from_pos, to_pos = move
-        piece = self.pieces[from_pos]
-        piece.move_to(*to_pos)
-        del self.pieces[from_pos]
-        self.pieces[to_pos] = piece
-
-    def undo_move(self, move):
-        to_pos, from_pos = move
-        piece = self.pieces[to_pos]
-        piece.move_to(*from_pos)
-        del self.pieces[to_pos]
-        self.pieces[from_pos] = piece
-
     def make_best_move_if_AI(self):
         _, best_move = self.minimax(depth=3, alpha=-math.inf, beta=math.inf, maximizing_player=False)
         if best_move:
@@ -298,6 +301,13 @@ class HalmaBoard:
             self.update_score()
             self.check_for_win()
             self.switch_turn()
+
+    def utility_function(self):
+        white_goal = [(7, 7), (7, 6), (7, 5), (6, 7), (6, 6)]
+        black_goal = [(0, 0), (0, 1), (1, 0), (1, 1)]
+        white_score = sum(1 for pos in white_goal if pos in self.pieces and self.pieces[pos].color == 'white')
+        black_score = sum(1 for pos in black_goal if pos in self.pieces and self.pieces[pos].color == 'black')
+        return white_score - black_score if self.current_turn == 'white' else black_score - white_score
 
 
 root = tk.Tk()
